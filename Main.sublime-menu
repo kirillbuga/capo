@@ -1,0 +1,30 @@
+[
+	{
+		"id" : "preferences",
+		"children": 
+		[	
+		{
+			"caption": "Capo Package Settings",
+			"id" : "package-settings",
+			"children":
+			[
+				{	"command" : "open_file",
+					"args": {"file": "${packages}/Capo/README.md"},
+					"caption": "Readme"
+				},
+				{ "caption": "-" },
+				{
+					"command": "open_file",
+					"args": {"file": "${packages}/Capo/capo.sublime-settings"},
+					"caption": "Settings – Default"
+				},
+				{
+					"command": "open_file",
+					"args": {"file": "${packages}/User/capo.sublime-settings"},
+					"caption": "Settings – User"
+				}
+			]
+		}
+		]
+	}
+]

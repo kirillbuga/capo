@@ -1,0 +1,4 @@
+[
+  { "caption": "-" , "id":"side-bar-end-separator"},
+  { "caption": "Capo this", "command": "capo"}
+]

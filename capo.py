@@ -11,13 +11,15 @@ class SearchResult(object):
 		self.readable = []
 
 class SearchCall(threading.Thread):
-	def __init__(self, word_for_search, proj_folders, excludedDirs, fileExcludePattern):
+	def __init__(self, word_for_search, proj_folders, excludedDirs, fileExcludePattern, mediators, methods):
 		self.text = word_for_search
 		self.proj_folders = proj_folders
 		self.result = None
 		self.nothing = False
 		self.dir_exclude = excludedDirs
-		self.file_exclude = fileExcludePattern
+		self.file_exclude = fileExcludePattern		
+		self.mediators = mediators
+		self.methods = methods
 		threading.Thread.__init__(self)
 
 	def isNotExcludedDir(self, dir):
@@ -42,15 +44,16 @@ class SearchCall(threading.Thread):
 				if self.isNotExcludedDir(dir_path):
 					for file_name in files:
 						#check for file extension exclusion
-						print(file_name)
 						if self.isNotExludedFile(file_name):
 							file_path = os.path.join(dir_path, file_name)
 							file = open(file_path, "r")
 							lines = file.readlines()					
 							for n, line in enumerate(lines):
 								if self.text in line:
-									result.pathes.append([file_path, n])
-									result.readable.append(file_name + ' @' + str(n + 1))
+									method = re.search('%s.%s\\((\'|\")(%s)(\'|\")' % (self.mediators, self.methods, self.text), line)
+									if method:
+										result.pathes.append([file_path, n])
+										result.readable.append(method.group(2) + ': ' + file_name + ' @' + str(n + 1))
 							file.close()
 		if not len(result.pathes):
 			self.nothing = True
@@ -62,12 +65,14 @@ class CapoCommand(sublime_plugin.TextCommand):
 	def run(self, edit):
 		regions = []
 		view = self.view
-		s = view.sel()[0]
-
+		s = view.sel()[0]		
 		region = sublime.Region(s.begin(), s.end())
 		line = view.line(region) #return the line which contains region
 		content = view.substr(line) #return content of region
-		word = re.search('mediator.publish\\((\'|\")(.*)(\'|\")', content)
+		settings = sublime.load_settings("capo.sublime-settings")
+		mediators = self.joinListToPattern(settings.get("mediators"))
+		methods = self.joinListToPattern(settings.get("methods"))
+		word = re.search('%s.%s\\((\'|\")(.*)(\'|\")' % (mediators, methods), content)
 		if word == None:
 			sublime.status_message('Can\'t find nothing in current line.')
 			return
@@ -75,15 +80,15 @@ class CapoCommand(sublime_plugin.TextCommand):
 		#get folders to search
 		window = sublime.active_window()
 		proj_folders = window.folders()
-		word_for_search = str(word.group(2))
+		word_for_search = str(word.group(4))
+		print(word_for_search)
 
-		print "[Capo] Searching for " + word_for_search + "..."
+		print "[Capo] Searching for " + word_for_search + "..."		
 		
 		dir_exclude = view.settings().get("folder_exclude_patterns")
-		dir_exclude.append('node_modules')
 		file_exclude = self.getFileExcludePattern(view)
 
-		thread = SearchCall(word_for_search, proj_folders, dir_exclude, file_exclude)
+		thread = SearchCall(word_for_search, proj_folders, dir_exclude, file_exclude, mediators, methods)
 		thread.start()
 		self.handle_thread(thread, window, view)
 
@@ -111,7 +116,10 @@ class CapoCommand(sublime_plugin.TextCommand):
 			pattern = re.escape(str(pattern))
 			patterns.append(pattern)
 
-		return "(" + ")|(".join(patterns) + ")"		 
+		return self.joinListToPattern(patterns)	 
+
+	def joinListToPattern(self, list):
+		return "(" + "|".join(list) + ")"	
 
 	#jump to file and set cursor to the given line
 	def jumpToFile(self, view, line):
@@ -136,9 +144,3 @@ class CapoCommand(sublime_plugin.TextCommand):
 				lambda: not new_file.is_loading(),
 				lambda: self.jumpToFile(new_file, line)
 			)
-
-#Backbone.trigger('namespace:method')
-#nothinghere('namespace3:method3')
-#mediator.publish('game:turn-local')
-#mediator.publish("namespace4:method4")
-#mediator.publish("namespace5:method5", function() {})

@@ -1,0 +1,22 @@
+/*
+ * capo default settings
+ *
+ */
+
+{
+  "mediators":
+  [
+    "Backbone",
+    "mediator"
+  ],
+  "methods":
+  [
+    "trigger",
+    "publish",
+    "subscribe",
+    "unsubscribe",
+    "on",
+    "once",
+    "off"
+  ]
+}
