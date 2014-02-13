@@ -11,27 +11,47 @@ class SearchResult(object):
 		self.readable = []
 
 class SearchCall(threading.Thread):
-	def __init__(self, word_for_search, proj_folders):
+	def __init__(self, word_for_search, proj_folders, excludedDirs, fileExcludePattern):
 		self.text = word_for_search
 		self.proj_folders = proj_folders
 		self.result = None
 		self.nothing = False
+		self.dir_exclude = excludedDirs
+		self.file_exclude = fileExcludePattern
 		threading.Thread.__init__(self)
+
+	def isNotExcludedDir(self, dir):
+		for exclude in self.dir_exclude:
+			if exclude in dir:
+				return False
+		return True
+
+	def isNotExludedFile(self, filename):
+		if not self.file_exclude:
+			return True
+		if re.match(self.file_exclude, filename):
+			return False
+		return True	
 
 	def run(self):
 		result = SearchResult()
-		for dir in self.proj_folders:
+		for dir in self.proj_folders:			
 			files = None
 			for dir_path, subdir, files in os.walk(dir):
-				for file_name in files:
-					file_path = os.path.join(dir_path, file_name)
-					file = open(file_path, "r")
-					lines = file.readlines()					
-					for n, line in enumerate(lines):
-						if self.text in line:
-							result.pathes.append([file_path, n])
-							result.readable.append(file_name + ' @' + str(n + 1))
-					file.close()
+				#check for dir in exclude dirs
+				if self.isNotExcludedDir(dir_path):
+					for file_name in files:
+						#check for file extension exclusion
+						print(file_name)
+						if self.isNotExludedFile(file_name):
+							file_path = os.path.join(dir_path, file_name)
+							file = open(file_path, "r")
+							lines = file.readlines()					
+							for n, line in enumerate(lines):
+								if self.text in line:
+									result.pathes.append([file_path, n])
+									result.readable.append(file_name + ' @' + str(n + 1))
+							file.close()
 		if not len(result.pathes):
 			self.nothing = True
 
@@ -58,23 +78,40 @@ class CapoCommand(sublime_plugin.TextCommand):
 		word_for_search = str(word.group(2))
 
 		print "[Capo] Searching for " + word_for_search + "..."
+		
+		dir_exclude = view.settings().get("folder_exclude_patterns")
+		dir_exclude.append('node_modules')
+		file_exclude = self.getFileExcludePattern(view)
 
-		thread = SearchCall(word_for_search, proj_folders)
+		thread = SearchCall(word_for_search, proj_folders, dir_exclude, file_exclude)
 		thread.start()
-		self.handle_threads(thread, window, view)
+		self.handle_thread(thread, window, view)
 
-	def handle_threads(self, thread, window, view):
+	def handle_thread(self, thread, window, view):
 		if thread.is_alive():
 			view.set_status('Capo', 'Searching...')
-			sublime.set_timeout(lambda: self.handle_threads(thread, window, view), 100)
+			sublime.set_timeout(lambda: self.handle_thread(thread, window, view), 100)
 			return
 		if thread.nothing == True:
-			sublime.status_message('No subscribers was found')
+			sublime.status_message('No subscribers were found')
 			view.erase_status('Capo')
 			return
 
 		view.erase_status('Capo')
 		window.show_quick_panel(thread.result.readable, lambda i: self.on_click(i, thread.result.pathes))
+
+	def getFileExcludePattern(self, view):
+		excludedFiles = view.settings().get("file_exclude_patterns", ['*.exe', '*.obj', '*.dll'])
+		if not excludedFiles:
+			return None
+
+		patterns = []
+		for pattern in excludedFiles:
+			pattern = re.sub('\*\.', '.', pattern)
+			pattern = re.escape(str(pattern))
+			patterns.append(pattern)
+
+		return "(" + ")|(".join(patterns) + ")"		 
 
 	#jump to file and set cursor to the given line
 	def jumpToFile(self, view, line):
@@ -85,7 +122,6 @@ class CapoCommand(sublime_plugin.TextCommand):
 
 		view.sel().add(sublime.Region(point))
 		view.show(point)
-
 
 	def on_click(self, index, results):
 		if index != -1:
