@@ -6,15 +6,13 @@ def do_when(conditional, callback, *args, **kwargs):
 	sublime.set_timeout(functools.partial(do_when, conditional, callback, *args, **kwargs), 50)
 
 class SearchCall(threading.Thread):
-	def __init__(self, word_for_search, proj_folders, excludedDirs, fileExcludePattern, mediators, methods):
-		self.text = word_for_search
-		self.proj_folders = proj_folders
+	def __init__(self, args):
+		self.pattern = args["pattern"]
+		self.proj_folders = args["proj_folders"]
 		self.result = None
 		self.nothing = False
-		self.dir_exclude = excludedDirs
-		self.file_exclude = fileExcludePattern		
-		self.mediators = mediators
-		self.methods = methods
+		self.dir_exclude = args["excludedDirs"]
+		self.file_exclude = args["fileExcludePattern"]		
 		threading.Thread.__init__(self)
 
 	def isNotExcludedDir(self, dir):
@@ -44,10 +42,9 @@ class SearchCall(threading.Thread):
 							file = open(file_path, "r")
 							lines = file.readlines()					
 							for n, line in enumerate(lines):
-								if self.text in line:
-									method = re.search('%s.%s\\((\'|\")(%s)(\'|\")' % (self.mediators, self.methods, self.text), line)
-									if method:
-										result.append([file_path, file_name, n, method.group(2)])
+								method = re.search(self.pattern, line)
+								if method:
+									result.append({"path" : file_path, "name" : file_name, "line" : n, "method" : method.group(2)})
 							file.close()
 		if not len(result):
 			self.nothing = True
@@ -58,6 +55,20 @@ class SearchCall(threading.Thread):
 class CapoCommand(sublime_plugin.TextCommand):
 	def __init__(self, args):
 		super(CapoCommand, self).__init__(args)
+		# retrieve settings
+		self.settings = sublime.load_settings("capo.sublime-settings")
+		self.mediators = self.joinListToPattern(self.settings.get("mediators"))
+		self.methods = self.joinListToPattern(self.settings.get("methods"))
+		self.searchPattern = '%s.%s\\((\'|\")(%s)(\'|\")' % (self.mediators, self.methods, '$WORD_FOR_SEARCH$')
+
+		#get folders to search
+		self.window = sublime.active_window()
+		self.proj_folders = self.window.folders()
+		# thread = SearchCall({"pattern" : self.searchPattern,
+		# 					 "proj_folders" : self.proj_folders, 
+		# 					 "excludedDirs" : [],
+		# 					 "fileExcludePattern" : ''})
+		# thread.start()
 
 	def run(self, edit):
 		regions = []
@@ -66,28 +77,28 @@ class CapoCommand(sublime_plugin.TextCommand):
 		region = sublime.Region(s.begin(), s.end())
 		line = view.line(region) #return the line which contains region
 		content = view.substr(line) #return content of region
-		settings = sublime.load_settings("capo.sublime-settings")
-		mediators = self.joinListToPattern(settings.get("mediators"))
-		methods = self.joinListToPattern(settings.get("methods"))
-		word = re.search('%s.%s\\((\'|\")(.*)(\'|\")' % (mediators, methods), content)
+
+		word = re.search('%s.%s\\((\'|\")((\w|-|:)*)(\'|\")' % (self.mediators, self.methods), content)
 		if word == None:
 			sublime.status_message('Can\'t find nothing in current line.')
 			return
 
-		#get folders to search
-		window = sublime.active_window()
-		proj_folders = window.folders()
 		word_for_search = str(word.group(4))
-		print(word_for_search)
 
 		print "[Capo] Searching for " + word_for_search + "..."		
 		
 		dir_exclude = view.settings().get("folder_exclude_patterns", ['.git', '.svn'])
 		file_exclude = self.getFileExcludePattern(view)
 
-		thread = SearchCall(word_for_search, proj_folders, dir_exclude, file_exclude, mediators, methods)
+		searchPattern = self.searchPattern.replace('$WORD_FOR_SEARCH$', word_for_search)
+
+		thread = SearchCall({"pattern" : searchPattern,
+							"proj_folders" : self.proj_folders, 
+							"excludedDirs" : dir_exclude,
+							"fileExcludePattern" : file_exclude})
+
 		thread.start()
-		self.handle_thread(thread, window, view)
+		self.handle_thread(thread, self.window, view)
 
 	def handle_thread(self, thread, window, view):
 		if thread.is_alive():
@@ -105,14 +116,10 @@ class CapoCommand(sublime_plugin.TextCommand):
 	def showQuickPanel(self, result, window):
 
 		items = []		
-		result.sort(key=lambda i: i[3])
+		result.sort(key=lambda i: i["method"])
 
 		for item in result:
-			path = item[0]
-			file_name = item[1]
-			line = item[2]
-			method = item[3]
-			items.append([method + ': ' + file_name + ' @' + str(line)])
+			items.append([item['method'] + ': ' + item['name'] + ' @' + str(item['line'])])
 
 		window.show_quick_panel(items, lambda i: self.on_click(i, result))
 
@@ -146,8 +153,8 @@ class CapoCommand(sublime_plugin.TextCommand):
 	def on_click(self, index, result):
 		if index != -1:
 			item = result[index]
-			file = item[0]
-			line = item[2]
+			file = item['path']
+			line = item['line']
 			print "[Capo] Opening file " + file + " to line " + str(line)
 			window = sublime.active_window()
 			new_file = window.open_file(file)
