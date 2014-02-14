@@ -5,11 +5,6 @@ def do_when(conditional, callback, *args, **kwargs):
 		return callback(*args, **kwargs)
 	sublime.set_timeout(functools.partial(do_when, conditional, callback, *args, **kwargs), 50)
 
-class SearchResult(object):
-	def __init__(self):
-		self.pathes = []
-		self.readable = []
-
 class SearchCall(threading.Thread):
 	def __init__(self, word_for_search, proj_folders, excludedDirs, fileExcludePattern, mediators, methods):
 		self.text = word_for_search
@@ -36,7 +31,7 @@ class SearchCall(threading.Thread):
 		return True	
 
 	def run(self):
-		result = SearchResult()
+		result = []
 		for dir in self.proj_folders:			
 			files = None
 			for dir_path, subdir, files in os.walk(dir):
@@ -52,16 +47,18 @@ class SearchCall(threading.Thread):
 								if self.text in line:
 									method = re.search('%s.%s\\((\'|\")(%s)(\'|\")' % (self.mediators, self.methods, self.text), line)
 									if method:
-										result.pathes.append([file_path, n])
-										result.readable.append(method.group(2) + ': ' + file_name + ' @' + str(n + 1))
+										result.append([file_path, file_name, n, method.group(2)])
 							file.close()
-		if not len(result.pathes):
+		if not len(result):
 			self.nothing = True
 
 		self.result = result;
 		return self.result
 
 class CapoCommand(sublime_plugin.TextCommand):
+	def __init__(self, args):
+		super(CapoCommand, self).__init__(args)
+
 	def run(self, edit):
 		regions = []
 		view = self.view
@@ -85,7 +82,7 @@ class CapoCommand(sublime_plugin.TextCommand):
 
 		print "[Capo] Searching for " + word_for_search + "..."		
 		
-		dir_exclude = view.settings().get("folder_exclude_patterns")
+		dir_exclude = view.settings().get("folder_exclude_patterns", ['.git', '.svn'])
 		file_exclude = self.getFileExcludePattern(view)
 
 		thread = SearchCall(word_for_search, proj_folders, dir_exclude, file_exclude, mediators, methods)
@@ -103,7 +100,21 @@ class CapoCommand(sublime_plugin.TextCommand):
 			return
 
 		view.erase_status('Capo')
-		window.show_quick_panel(thread.result.readable, lambda i: self.on_click(i, thread.result.pathes))
+		self.showQuickPanel(thread.result, window)
+
+	def showQuickPanel(self, result, window):
+
+		items = []		
+		result.sort(key=lambda i: i[3])
+
+		for item in result:
+			path = item[0]
+			file_name = item[1]
+			line = item[2]
+			method = item[3]
+			items.append([method + ': ' + file_name + ' @' + str(line)])
+
+		window.show_quick_panel(items, lambda i: self.on_click(i, result))
 
 	def getFileExcludePattern(self, view):
 		excludedFiles = view.settings().get("file_exclude_patterns", ['*.exe', '*.obj', '*.dll'])
@@ -128,14 +139,15 @@ class CapoCommand(sublime_plugin.TextCommand):
 		vector = view.text_to_layout(nav_point)
 		view.set_viewport_position(vector)
 
+		view.sel().clear()
 		view.sel().add(sublime.Region(point))
 		view.show(point)
 
-	def on_click(self, index, results):
+	def on_click(self, index, result):
 		if index != -1:
-			item = results[index]
+			item = result[index]
 			file = item[0]
-			line = item[1]
+			line = item[2]
 			print "[Capo] Opening file " + file + " to line " + str(line)
 			window = sublime.active_window()
 			new_file = window.open_file(file)
