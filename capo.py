@@ -13,6 +13,7 @@ class SearchCall(threading.Thread):
 		self.nothing = False
 		self.dir_exclude = args["excludedDirs"]
 		self.file_exclude = args["fileExcludePattern"]		
+		self.currentFile = args["currentFile"]		
 		threading.Thread.__init__(self)
 
 	def isNotExcludedDir(self, dir):
@@ -38,10 +39,12 @@ class SearchCall(threading.Thread):
 					for file_name in files:
 						#check for file extension exclusion
 						if self.isNotExludedFile(file_name):
-							file_path = os.path.join(dir_path, file_name)
+							file_path = os.path.join(dir_path, file_name)							
 							file = open(file_path, "r")
 							lines = file.readlines()					
 							for n, line in enumerate(lines):
+								if file_path == self.currentFile["name"] and n == self.currentFile["line"]:
+									continue
 								method = re.search(self.pattern, line)
 								if method:
 									result.append({"path" : file_path, "name" : file_name, "line" : n, "method" : method.group(2)})
@@ -76,11 +79,12 @@ class CapoCommand(sublime_plugin.TextCommand):
 		s = view.sel()[0]		
 		region = sublime.Region(s.begin(), s.end())
 		line = view.line(region) #return the line which contains region
+		lineNumber = view.rowcol(s.begin())[0]
 		content = view.substr(line) #return content of region
 
 		word = re.search('%s.%s\\((\'|\")((\w|-|:)*)(\'|\")' % (self.mediators, self.methods), content)
 		if word == None:
-			sublime.status_message('Can\'t find nothing in current line.')
+			sublime.status_message('Can\'t find publishers/subscribers in the current line.')
 			return
 
 		word_for_search = str(word.group(4))
@@ -89,21 +93,20 @@ class CapoCommand(sublime_plugin.TextCommand):
 		
 		dir_exclude = view.settings().get("folder_exclude_patterns", ['.git', '.svn'])
 		file_exclude = self.getFileExcludePattern(view)
-
 		searchPattern = self.searchPattern.replace('$WORD_FOR_SEARCH$', word_for_search)
-
 		thread = SearchCall({"pattern" : searchPattern,
 							"proj_folders" : self.proj_folders, 
 							"excludedDirs" : dir_exclude,
-							"fileExcludePattern" : file_exclude})
+							"fileExcludePattern" : file_exclude,
+							"currentFile" : { "name" : view.file_name(), "line" : lineNumber}})
 
 		thread.start()
-		self.handle_thread(thread, self.window, view)
+		self.handle_thread(thread, self.window, view, word_for_search)
 
-	def handle_thread(self, thread, window, view):
+	def handle_thread(self, thread, window, view, word):
 		if thread.is_alive():
-			view.set_status('Capo', 'Searching...')
-			sublime.set_timeout(lambda: self.handle_thread(thread, window, view), 100)
+			view.set_status('Capo', 'Searching %s ...' %word)
+			sublime.set_timeout(lambda: self.handle_thread(thread, window, view, word), 100)
 			return
 		if thread.nothing == True:
 			sublime.status_message('No subscribers were found')
