@@ -11,8 +11,7 @@ class SearchCall(threading.Thread):
 		self.proj_folders = args["proj_folders"]
 		self.result = None
 		self.nothing = False
-		self.dir_exclude = args["excludedDirs"]
-		self.file_exclude = args["fileExcludePattern"]		
+		self.dir_exclude = args["excludedDirs"]	
 		self.currentFile = args["currentFile"]		
 		threading.Thread.__init__(self)
 
@@ -38,9 +37,9 @@ class SearchCall(threading.Thread):
 				if self.isNotExcludedDir(dir_path):
 					for file_name in files:
 						#check for file extension exclusion
-						if self.isNotExludedFile(file_name):
-							file_path = os.path.join(dir_path, file_name)							
-							file = open(file_path, "r")
+						if re.search('.js$', file_name) != None:
+							file_path = os.path.join(dir_path, file_name)		
+							file = open(file_path, encoding="ISO-8859-1")
 							lines = file.readlines()					
 							for n, line in enumerate(lines):
 								if file_path == self.currentFile["name"] and n == self.currentFile["line"]:
@@ -89,15 +88,21 @@ class CapoCommand(sublime_plugin.TextCommand):
 
 		word_for_search = str(word.group(4))
 
-		print "[Capo] Searching for " + word_for_search + "..."		
-		
-		dir_exclude = view.settings().get("folder_exclude_patterns", ['.git', '.svn'])
-		file_exclude = self.getFileExcludePattern(view)
+		print("[Capo] Searching for " + word_for_search + "...")
+		folders = self.window.project_data()['folders']
+		dir_exclude = []
+
+		for folder in folders:
+			exclude_folders = folder.get('folder_exclude_patterns');
+			if exclude_folders != None:
+				for dir in exclude_folders:
+					dir_exclude.append(dir)
+
+		print(dir_exclude)
 		searchPattern = self.searchPattern.replace('$WORD_FOR_SEARCH$', word_for_search)
 		thread = SearchCall({"pattern" : searchPattern,
 							"proj_folders" : self.proj_folders, 
 							"excludedDirs" : dir_exclude,
-							"fileExcludePattern" : file_exclude,
 							"currentFile" : { "name" : view.file_name(), "line" : lineNumber}})
 
 		thread.start()
@@ -126,19 +131,6 @@ class CapoCommand(sublime_plugin.TextCommand):
 
 		window.show_quick_panel(items, lambda i: self.on_click(i, result))
 
-	def getFileExcludePattern(self, view):
-		excludedFiles = view.settings().get("file_exclude_patterns", ['*.exe', '*.obj', '*.dll'])
-		if not excludedFiles:
-			return None
-
-		patterns = []
-		for pattern in excludedFiles:
-			pattern = re.sub('\*\.', '.', pattern)
-			pattern = re.escape(str(pattern))
-			patterns.append(pattern)
-
-		return self.joinListToPattern(patterns)	 
-
 	def joinListToPattern(self, list):
 		return "(" + "|".join(list) + ")"	
 
@@ -158,7 +150,7 @@ class CapoCommand(sublime_plugin.TextCommand):
 			item = result[index]
 			file = item['path']
 			line = item['line']
-			print "[Capo] Opening file " + file + " to line " + str(line)
+			print("[Capo] Opening file " + file + " to line " + str(line))
 			window = sublime.active_window()
 			new_file = window.open_file(file)
 
