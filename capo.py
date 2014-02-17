@@ -34,6 +34,7 @@ class CacheCall(threading.Thread):
 							result[file_path] = lines
 							file.close()
 		self.result = result
+		print("[Capo] Building cache finished...")
 
 class SearchCall(threading.Thread):
 	def __init__(self, args):
@@ -76,7 +77,7 @@ class SearchCall(threading.Thread):
 									continue
 								method = re.search(self.pattern, line)
 								if method:
-									result.append({"path" : file_path, "name" : file_name, "line" : n, "method" : method.group(2)})
+									result.append({"path" : file_path, "name" : file_name, "line" : n, "method" : method.group(3)})
 		if not len(result):
 			self.nothing = True
 
@@ -90,7 +91,7 @@ class CapoCommand(sublime_plugin.TextCommand):
 		self.settings = sublime.load_settings("capo.sublime-settings")
 		self.mediators = self.joinListToPattern(self.settings.get("mediators"))
 		self.methods = self.joinListToPattern(self.settings.get("methods"))
-		self.searchPattern = '%s.%s\\((\'|\")(%s)(\'|\")' % (self.mediators, self.methods, '$WORD_FOR_SEARCH$')
+		self.searchPattern = '({0}.{1}\\((\'|\")({2})(\'|\"))|({1}\({0},(\'|\")({2})(\'|\"))'.format(self.mediators, self.methods, '$WORD_FOR_SEARCH$')
 
 		#get folders to search
 		self.window = sublime.active_window()
@@ -105,10 +106,16 @@ class CapoCommand(sublime_plugin.TextCommand):
 				for dir in exclude_folders:
 					self.dir_exclude.append(dir)
 
-		thread = CacheCall({ "proj_folders" : self.proj_folders, 
-							 "excludedDirs" : []})
-		thread.start()
-		self.handle_caching(thread, self.view)
+		if self.settings.get('useDefaultExcludePattern'):
+			defaultExcludePattern = self.settings.get('folder_exclude_patterns')
+			for folder in defaultExcludePattern:
+				self.dir_exclude.append(folder)
+
+		if self.cache == None:
+			thread = CacheCall({ "proj_folders" : self.proj_folders, 
+								 "excludedDirs" : []})
+			thread.start()
+			self.handle_caching(thread, self.view)
 
 	def run(self, edit):
 		regions = []
@@ -117,18 +124,19 @@ class CapoCommand(sublime_plugin.TextCommand):
 		region = sublime.Region(s.begin(), s.end())
 		line = view.line(region) #return the line which contains region
 		lineNumber = view.rowcol(s.begin())[0]
-		content = view.substr(line) #return content of region
+		content = view.substr(line).replace(' ', '') #return content of region
 
 		if self.cache == None:
 			sublime.status_message('Building the cache to make awesome performance...')
 			return
 
-		word = re.search('%s.%s\\((\'|\")((\w|-|:)*)(\'|\")' % (self.mediators, self.methods), content)
+		word = re.search('({0}.{1}\\((\'|\")((\w|-|:)*)(\'|\"))|(.{1}\({0},(\'|\")((\w|-|:)*)(\'|\"))'.format(self.mediators, self.methods), content)
+
 		if word == None:
 			sublime.status_message('Can\'t find publishers/subscribers in the current line.')
 			return
 
-		word_for_search = str(word.group(4))
+		word_for_search = str(word.group(5) or word.group(12))
 
 		print("[Capo] Searching for " + word_for_search + "...")
 
@@ -165,7 +173,7 @@ class CapoCommand(sublime_plugin.TextCommand):
 	def showQuickPanel(self, result, window):
 
 		items = []		
-		result.sort(key=lambda i: i["method"])
+		result.sort(key=lambda i: (i["method"], i["line"]))
 
 		for item in result:
 			items.append([item['method'] + ': ' + item['name'] + ' @' + str(item['line'])])
