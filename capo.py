@@ -75,9 +75,9 @@ class SearchCall(threading.Thread):
 							for n, line in enumerate(lines):
 								if file_path == self.currentFile["name"] and n == self.currentFile["line"]:
 									continue
-								method = re.search(self.pattern, line)
+								method = re.search(self.pattern, line.replace(' ', ''))
 								if method:
-									result.append({"path" : file_path, "name" : file_name, "line" : n, "method" : method.group(3)})
+									result.append({"path" : file_path, "name" : file_name, "line" : n, "method" : method.group(6)})
 		if not len(result):
 			self.nothing = True
 
@@ -91,7 +91,7 @@ class CapoCommand(sublime_plugin.TextCommand):
 		self.settings = sublime.load_settings("capo.sublime-settings")
 		self.mediators = self.joinListToPattern(self.settings.get("mediators"))
 		self.methods = self.joinListToPattern(self.settings.get("methods"))
-		self.searchPattern = '({0}.{1}\\((\'|\")({2})(\'|\"))|({1}\(({0}.)?{0},(\'|\")({2})(\'|\"))'.format(self.mediators, self.methods, '$WORD_FOR_SEARCH$')
+		self.searchPattern = '.{0}\(({1}?.?{1},)?(\'|\")({2})(\'|\")'.format(self.methods, self.mediators, '$WORD_FOR_SEARCH$')
 
 		#get folders to search
 		self.window = sublime.active_window()
@@ -130,13 +130,12 @@ class CapoCommand(sublime_plugin.TextCommand):
 			sublime.status_message('Building the cache to make awesome performance...')
 			return
 
-		word = re.search('({0}.{1}\\((\'|\")((\w|-|:)*)(\'|\"))|(.{1}\(({0}.)?{0},(\'|\")((\w|-|:)*)(\'|\"))'.format(self.mediators, self.methods), content)
-		print('({0}.{1}\\((\'|\")((\w|-|:)*)(\'|\"))|(.{1}\(({0}.)?{0},(\'|\")((\w|-|:)*)(\'|\"))'.format(self.mediators, self.methods))
+		word = re.search('.{0}\(({1}?.?{1},)?(\'|\")((\w|-|:|\s)*)(\'|\")'.format(self.methods, self.mediators), content)		
 		if word == None:
 			sublime.status_message('Can\'t find publishers/subscribers in the current line.')
 			return
 
-		word_for_search = str(word.group(5) or word.group(14))
+		word_for_search = str(word.group(6))
 
 		print("[Capo] Searching for " + word_for_search + "...")
 
