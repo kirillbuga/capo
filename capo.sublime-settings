@@ -9,7 +9,9 @@
     "Backbone",
     "mediator",
     "this",
-    "self"
+    "self",
+    "model",
+    "view"
   ],
   "methods":
   [

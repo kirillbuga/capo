@@ -91,7 +91,7 @@ class CapoCommand(sublime_plugin.TextCommand):
 		self.settings = sublime.load_settings("capo.sublime-settings")
 		self.mediators = self.joinListToPattern(self.settings.get("mediators"))
 		self.methods = self.joinListToPattern(self.settings.get("methods"))
-		self.searchPattern = '({0}.{1}\\((\'|\")({2})(\'|\"))|({1}\({0},(\'|\")({2})(\'|\"))'.format(self.mediators, self.methods, '$WORD_FOR_SEARCH$')
+		self.searchPattern = '({0}.{1}\\((\'|\")({2})(\'|\"))|({1}\(({0}.)?{0},(\'|\")({2})(\'|\"))'.format(self.mediators, self.methods, '$WORD_FOR_SEARCH$')
 
 		#get folders to search
 		self.window = sublime.active_window()
@@ -130,13 +130,13 @@ class CapoCommand(sublime_plugin.TextCommand):
 			sublime.status_message('Building the cache to make awesome performance...')
 			return
 
-		word = re.search('({0}.{1}\\((\'|\")((\w|-|:)*)(\'|\"))|(.{1}\({0},(\'|\")((\w|-|:)*)(\'|\"))'.format(self.mediators, self.methods), content)
-
+		word = re.search('({0}.{1}\\((\'|\")((\w|-|:)*)(\'|\"))|(.{1}\(({0}.)?{0},(\'|\")((\w|-|:)*)(\'|\"))'.format(self.mediators, self.methods), content)
+		print('({0}.{1}\\((\'|\")((\w|-|:)*)(\'|\"))|(.{1}\(({0}.)?{0},(\'|\")((\w|-|:)*)(\'|\"))'.format(self.mediators, self.methods))
 		if word == None:
 			sublime.status_message('Can\'t find publishers/subscribers in the current line.')
 			return
 
-		word_for_search = str(word.group(5) or word.group(12))
+		word_for_search = str(word.group(5) or word.group(14))
 
 		print("[Capo] Searching for " + word_for_search + "...")
 
@@ -213,4 +213,3 @@ class CapoCommand(sublime_plugin.TextCommand):
 		lines = file.readlines()					
 		self.cache[view.file_name()] = lines
 		file.close()
-
