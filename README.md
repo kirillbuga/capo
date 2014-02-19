@@ -3,6 +3,8 @@ Capo
 
 Sublime Text 3 plugin which allows you to keep all your events together in event-driven architecture. Using it you can easily find all publish/subscribers for given event and navigate to the file with it.
 
+![Example](example.gif)
+
 * [How to install](#how-to-install)
 * [Available actions](#available-actions)
 * [Plugin Settings](#plugin-settings)
@@ -42,7 +44,9 @@ For better plugin's performace set up your project's `folder_exclude_pattern` or
 
 Keep in mind that capo won't find the event subsriptions defined within one name and delimeted with space.
 
-<kbd>this.listenTo('first:message second:message etc', callback)</kbd>
+```js
+this.listenTo('first:message second:message etc', callback)
+```
 
 The plugin will interpret `first:message second:message etc` as one event.
 

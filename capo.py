@@ -77,7 +77,7 @@ class SearchCall(threading.Thread):
 									continue
 								method = re.search(self.pattern, line.replace(' ', ''))
 								if method:
-									result.append({"path" : file_path, "name" : file_name, "line" : n, "method" : method.group(6)})
+									result.append({"path" : file_path, "name" : file_name, "line" : n, "method" : method.group(1)})
 		if not len(result):
 			self.nothing = True
 
