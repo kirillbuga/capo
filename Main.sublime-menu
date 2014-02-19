@@ -4,25 +4,32 @@
 		"children": 
 		[	
 		{
-			"caption": "Capo Package Settings",
+			"caption": "Package Settings",
 			"id" : "package-settings",
 			"children":
 			[
-				{	"command" : "open_file",
-					"args": {"file": "${packages}/Capo/README.md"},
-					"caption": "Readme"
-				},
-				{ "caption": "-" },
-				{
-					"command": "open_file",
-					"args": {"file": "${packages}/Capo/capo.sublime-settings"},
-					"caption": "Settings – Default"
-				},
-				{
-					"command": "open_file",
-					"args": {"file": "${packages}/User/capo.sublime-settings"},
-					"caption": "Settings – User"
-				}
+			{
+				"caption": "Capo",
+				"id" : "capo-package-settings",
+				"children":
+				[
+					{	"command" : "open_file",
+						"args": {"file": "${packages}/Capo/README.md"},
+						"caption": "Readme"
+					},
+					{ "caption": "-" },
+					{
+						"command": "open_file",
+						"args": {"file": "${packages}/Capo/capo.sublime-settings"},
+						"caption": "Settings – Default"
+					},
+					{
+						"command": "open_file",
+						"args": {"file": "${packages}/User/capo.sublime-settings"},
+						"caption": "Settings – User"
+					}
+				]
+			}
 			]
 		}
 		]

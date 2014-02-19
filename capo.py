@@ -99,6 +99,7 @@ class CapoCommand(sublime_plugin.TextCommand):
 		self.folders = self.window.project_data()['folders']
 		self.dir_exclude = []
 		self.cache = None
+		self.toBeSearched = None
 
 		for folder in self.folders:
 			exclude_folders = folder.get('folder_exclude_patterns');
@@ -126,16 +127,20 @@ class CapoCommand(sublime_plugin.TextCommand):
 		lineNumber = view.rowcol(s.begin())[0]
 		content = view.substr(line).replace(' ', '') #return content of region
 
-		if self.cache == None:
-			sublime.status_message('Building the cache to make awesome performance...')
-			return
+		if self.toBeSearched == None:
+			word = re.search('.{0}\(({1}?.?{1},)?(\'|\")((\w|-|:|\s)*)(\'|\")'.format(self.methods, self.mediators), content)		
+			if word == None:
+				sublime.status_message('Can\'t find publishers/subscribers in the current line.')
+				return
 
-		word = re.search('.{0}\(({1}?.?{1},)?(\'|\")((\w|-|:|\s)*)(\'|\")'.format(self.methods, self.mediators), content)		
-		if word == None:
-			sublime.status_message('Can\'t find publishers/subscribers in the current line.')
-			return
-
-		word_for_search = str(word.group(6))
+			word_for_search = str(word.group(6))
+			
+			if self.cache == None:
+				self.toBeSearched = word_for_search
+				return
+		else:
+			word_for_search = self.toBeSearched
+			self.toBeSearched = None
 
 		print("[Capo] Searching for " + word_for_search + "...")
 
@@ -167,6 +172,8 @@ class CapoCommand(sublime_plugin.TextCommand):
 				sublime.set_timeout(lambda: self.handle_caching(thread, view), 100)
 				return
 		self.cache = thread.result
+		if self.toBeSearched != None:
+			view.run_command('capo')
 		view.erase_status('Capo')
 
 	def showQuickPanel(self, result, window):
