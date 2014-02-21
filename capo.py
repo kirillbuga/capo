@@ -178,7 +178,7 @@ class CapoCommand(sublime_plugin.TextCommand):
 
 	def showQuickPanel(self, result, window):
 
-		items = []		
+		items = []
 		result.sort(key=lambda i: (i["method"], i["line"]))
 
 		for item in result:
@@ -197,7 +197,7 @@ class CapoCommand(sublime_plugin.TextCommand):
 		view.set_viewport_position(vector)
 
 		view.sel().clear()
-		view.sel().add(sublime.Region(point))
+		view.sel().add(view.line(point))
 		view.show(point)
 
 	def on_click(self, index, result):
