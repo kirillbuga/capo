@@ -5,37 +5,6 @@ def do_when(conditional, callback, *args, **kwargs):
 		return callback(*args, **kwargs)
 	sublime.set_timeout(functools.partial(do_when, conditional, callback, *args, **kwargs), 50)
 
-class CacheCall(threading.Thread):
-	def __init__(self, args):
-		self.proj_folders = args["proj_folders"]
-		self.dir_exclude = args["excludedDirs"]
-		threading.Thread.__init__(self)
-
-	def isNotExcludedDir(self, dir):
-		for exclude in self.dir_exclude:
-			if exclude in dir:
-				return False
-		return True
-
-	def run(self):
-		result = {}
-		print("[Capo] Building cache...")
-		for dir in self.proj_folders:			
-			files = None
-			for dir_path, subdir, files in os.walk(dir):
-				#check for dir in exclude dirs
-				if self.isNotExcludedDir(dir_path):
-					for file_name in files:
-						#check for file extension exclusion
-						if re.search('.js$', file_name) != None:
-							file_path = os.path.join(dir_path, file_name)		
-							file = open(file_path, encoding="ISO-8859-1")
-							lines = file.readlines()					
-							result[file_path] = lines
-							file.close()
-		self.result = result
-		print("[Capo] Building cache finished...")
-
 class SearchCall(threading.Thread):
 	def __init__(self, args):
 		self.pattern = args["pattern"]
@@ -44,7 +13,6 @@ class SearchCall(threading.Thread):
 		self.nothing = False
 		self.dir_exclude = args["excludedDirs"]	
 		self.currentFile = args["currentFile"]
-		self.cache = args["cache"]
 		threading.Thread.__init__(self)
 
 	def isNotExcludedDir(self, dir):
@@ -71,7 +39,8 @@ class SearchCall(threading.Thread):
 						#check for file extension exclusion
 						if re.search('.js$', file_name) != None:
 							file_path = os.path.join(dir_path, file_name)
-							lines = self.cache[file_path]		
+							file = open(file_path, encoding="ISO-8859-1")
+							lines = file.readlines()	
 							for n, line in enumerate(lines):
 								if file_path == self.currentFile["name"] and n == self.currentFile["line"]:
 									continue
@@ -98,8 +67,6 @@ class CapoCommand(sublime_plugin.TextCommand):
 		self.proj_folders = self.window.folders()
 		self.folders = self.window.project_data()['folders']
 		self.dir_exclude = []
-		self.cache = None
-		self.toBeSearched = None
 
 		for folder in self.folders:
 			exclude_folders = folder.get('folder_exclude_patterns');
@@ -112,12 +79,6 @@ class CapoCommand(sublime_plugin.TextCommand):
 			for folder in defaultExcludePattern:
 				self.dir_exclude.append(folder)
 
-		if self.cache == None:
-			thread = CacheCall({ "proj_folders" : self.proj_folders, 
-								 "excludedDirs" : []})
-			thread.start()
-			self.handle_caching(thread, self.view)
-
 	def run(self, edit):
 		regions = []
 		view = self.view
@@ -127,20 +88,12 @@ class CapoCommand(sublime_plugin.TextCommand):
 		lineNumber = view.rowcol(s.begin())[0]
 		content = view.substr(line).replace(' ', '') #return content of region
 
-		if self.toBeSearched == None:
-			word = re.search('.{0}\(({1}?.?{1},)?(\'|\")((\w|-|:|\s)*)(\'|\")'.format(self.methods, self.mediators), content)		
-			if word == None:
-				sublime.status_message('Can\'t find publishers/subscribers in the current line.')
-				return
+		word = re.search('.{0}\(({1}?.?{1},)?(\'|\")((\w|-|:|\s)*)(\'|\")'.format(self.methods, self.mediators), content)		
+		if word == None:
+			sublime.status_message('Can\'t find publishers/subscribers in the current line.')
+			return
 
-			word_for_search = str(word.group(6))
-			
-			if self.cache == None:
-				self.toBeSearched = word_for_search
-				return
-		else:
-			word_for_search = self.toBeSearched
-			self.toBeSearched = None
+		word_for_search = str(word.group(6))
 
 		print("[Capo] Searching for " + word_for_search + "...")
 
@@ -148,7 +101,6 @@ class CapoCommand(sublime_plugin.TextCommand):
 		thread = SearchCall({"pattern" : searchPattern,
 							"proj_folders" : self.proj_folders, 
 							"excludedDirs" : self.dir_exclude,
-							"cache" : self.cache,
 							"currentFile" : { "name" : view.file_name(), "line" : lineNumber}})
 
 		thread.start()
@@ -166,15 +118,6 @@ class CapoCommand(sublime_plugin.TextCommand):
 
 		view.erase_status('Capo')
 		self.showQuickPanel(thread.result, window)
-
-	def handle_caching(self, thread, view):
-		if thread.is_alive():
-				sublime.set_timeout(lambda: self.handle_caching(thread, view), 100)
-				return
-		self.cache = thread.result
-		if self.toBeSearched != None:
-			view.run_command('capo')
-		view.erase_status('Capo')
 
 	def showQuickPanel(self, result, window):
 
@@ -213,9 +156,3 @@ class CapoCommand(sublime_plugin.TextCommand):
 				lambda: not new_file.is_loading(),
 				lambda: self.jumpToFile(new_file, line)
 			)
-
-	def on_post_save_async(self, view):
-		file = open(view.file_name(), encoding="ISO-8859-1")
-		lines = file.readlines()					
-		self.cache[view.file_name()] = lines
-		file.close()
